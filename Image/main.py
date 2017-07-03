@@ -1,19 +1,29 @@
 #!/bin/python
 import csv, random, pickle, os.path, multiprocessing, itertools
 from joblib import Parallel, delayed
+from features import imageToFeatures
 
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import io
-from skimage import exposure
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.model_selection import KFold
+from sklearn import svm
+from sklearn import naive_bayes
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn import metrics
 from sklearn.metrics import label_ranking_average_precision_score
 
-from fast import *
+#   'NP' : positive or negative, two classes
+#   'F'  : full scale of emotions, eight classes
+MODE = 'F'
+#   If this is high, only the strongest images will be kept
+STRONG_THRESHOLD = 0.0
+#   Number of splits in the K-fold
+KSPLITS = 10
+#   Compute features no matter if a dump already exists
+FORCE_FEATURE_COMPUTING = True
 
 #Emotions :
 # P  0 Amusement
@@ -38,7 +48,7 @@ def getData(truthFile):
         for row in reader:
             filenames.append(row[0])
             emotions.append([int(e) for e in row[1:]])
-    return (filenames, emotions)
+    return (np.array(filenames), np.array(emotions))
 
 """
     Converts a full vector of emotions to a vector
@@ -46,7 +56,10 @@ def getData(truthFile):
 """
 def emotionsFtoNP(emotionsF):
     return [sum([emotionsF[i] for i in posIndices]),\
-            sum([emotionsF[i] for i in negIndices])]
+            sum([emotionsF[i] for i in negIndices])];
+
+def filterWeakEmotions(emotions):
+    return [e.max() > e.sum() * STRONG_THRESHOLD for e in emotions]
 
 def compressEmotions(emotions):
     return np.array(list((map(np.argmax, emotions))))
@@ -77,23 +90,22 @@ def emotionsFtoHlabels(emotionsF):
 def getImages(filenames, dir = 'images/'):
     return [io.imread(dir + f) for f in filenames]
 
-def dumpLabels(filenames, labels):
-    for i in range(len(filenames)):
-        print(filenames[i], "\t", labels[i])
-
 """
     Returns a trained model optimized for the NP problem
 """
 def NPModel(features, labels):
+    #old = 64
     clf = RandomForestClassifier(max_depth=4, n_estimators=64,\
-            max_features=64, n_jobs=-1, random_state=39, class_weight \
+            max_features=20, n_jobs=-1, random_state=39, class_weight \
             = 'balanced')
     clf.fit(features, labels)
     return clf
 
 def FModel(features, labels):
     clf = RandomForestClassifier(max_depth=64, n_estimators=32,\
-            max_features=32, n_jobs=-1)
+            max_features=20, n_jobs=-1)
+    #clf = svm.SVC()
+    #clf = naive_bayes.GaussianNB()
     clf.fit(features, labels)
     return clf
 
@@ -102,66 +114,65 @@ def FModel(features, labels):
     Inspired from 'http://scikit-learn.org/stable/auto_examples
         /model_selection/plot_confusion_matrix.html'
 """
-def confusionMatrix(prediction, labels, classes):
+def evaluate(prediction, labels, classes, display = True):
     plt.figure()
-    M = metrics.confusion_matrix(prediction, labels, range(len(classes)))
-    plt.imshow(M, interpolation='nearest', cmap=plt.cm.Blues)
-    plt.title('Confusion matrix')
-    plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
-    thresh = M.max() / 2.
-    for i, j in itertools.product(range(M.shape[0]), range(M.shape[1])):
-        plt.text(j, i, M[i, j],
-                 horizontalalignment="center",
-                 color="white" if M[i, j] > thresh else "black")
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    plt.show()
+    M = metrics.confusion_matrix(prediction, labels, range(len(classes))).T
+    if display:
+        plt.imshow(M, interpolation='nearest', cmap=plt.cm.Blues)
+        plt.title('Confusion matrix')
+        plt.colorbar()
+        tick_marks = np.arange(len(classes))
+        plt.xticks(tick_marks, classes, rotation=45)
+        plt.yticks(tick_marks, classes)
+        thresh = M.max() / 2.
+        for i, j in itertools.product(range(M.shape[0]), range(M.shape[1])):
+            if(M[i, j] > 0):
+                plt.text(j, i, M[i, j],
+                        horizontalalignment="center",
+                        color="white" if M[i, j] > thresh else "black")
+        plt.tight_layout()
+        plt.ylabel('True label')
+        plt.xlabel('Predicted label')
+        plt.show()
 
     acc = 0
     for i in range(len(classes)):
         acc += M[i][i]
-    print("ACCURACY : ", acc / len(labels))
+    return acc / len(labels)
 
-#MODE
-#   'NP' : positive or negative, two classes
-#   'F'  : full scale of emotions, eight classes
-MODE = 'F'
-
-if __name__ == "__main__":
+def generateTrainedModel():
     #Get the data
     print("Fetching data...")
     filenames, emotionsF = getData('groundTruth.csv');
     if MODE == 'NP':
         labels = emotionsFtoNPlabels(emotionsF)
     else :
-        labels = compressEmotions(emotionsF)
-    #dumpLabels(filenames, labels)
-    #exit()
+        strong = filterWeakEmotions(emotionsF)
+        labels = compressEmotions(emotionsF[strong])
+        filenames = filenames[strong]
+        print(filenames.shape[0], " images selected")
 
     #Use dumped features if existing
-    if not os.path.isfile('features.pickle') :
+    if FORCE_FEATURE_COMPUTING or not os.path.isfile('dumpFeatures.pickle') :
         #Manually compute features
         print("Computing features...")
         images = getImages(filenames)
         num_cores = multiprocessing.cpu_count()
         features = np.array(Parallel(n_jobs=num_cores)\
-                (delayed(imageToFeatures)(i, 8) for i in images))
+                (delayed(imageToFeatures)(i) for i in images))
         scaler = StandardScaler();
+        print(features.shape)
         scaler.fit_transform(features)
-        pickle.dump(features, open('features.pickle', "wb"))
+        pickle.dump(features, open('dumpFeatures.pickle', "wb"))
     else:
         #Retrieve previously computed features
         print("Retrieving features...")
-        features = pickle.load(open('features.pickle', "rb"))
+        features = pickle.load(open('dumpFeatures.pickle', "rb"))
 
     print("Testing the model")
     #10-fold testing
     prediction, correct = [], []
-    kf = KFold(n_splits=10)
+    kf = KFold(n_splits = KSPLITS)
     for train_index, test_index in kf.split(features):
         #Train the model
         if MODE == 'NP':
@@ -172,12 +183,17 @@ if __name__ == "__main__":
 
         #Test the model
         correct += list(labels[test_index])
+    return (prediction, correct)
+
+if __name__ == "__main__":
+    prediction, correct = generateTrainedModel()
     if MODE == 'NP':
-        confusionMatrix(prediction, correct, ['Positive', 'Negative'])
+        acc = evaluate(prediction, correct, ['Positive', 'Negative'])
     else:
         #print(prediction)
         #print(label_ranking_average_precision_score(correct, prediction))
-        confusionMatrix(prediction, correct, emotionsList)
+        acc = evaluate(prediction, correct, emotionsList)
         simpleP = list(map(lambda x: x in negIndices, prediction))
         simpleC = list(map(lambda x: x in negIndices, correct))
-        confusionMatrix(simpleP, simpleC, ['Positive', 'Negative'])
+        #acc = evaluate(simpleP, simpleC, ['Positive', 'Negative'])
+    print("ACCURACY : ", acc)
