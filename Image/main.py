@@ -18,12 +18,18 @@ from sklearn.metrics import label_ranking_average_precision_score
 #   'NP' : positive or negative, two classes
 #   'F'  : full scale of emotions, eight classes
 MODE = 'F'
-#   If this is high, only the strongest images will be kept
+#   If this is high, only the strongest images will be kept. 0 to disable
 STRONG_THRESHOLD = 0.0
 #   Number of splits in the K-fold
 KSPLITS = 10
 #   Compute features no matter if a dump already exists
-FORCE_FEATURE_COMPUTING = True
+FORCE_FEATURE_COMPUTING = False
+#   Path to images
+#IMDIR = 'iaps/'
+IMDIR = 'images/'
+#   Path to ground truth file
+#LABEL_PATH = 'mikels/IAPS.csv'
+LABEL_PATH = 'groundTruth.csv'
 
 #Emotions :
 # P  0 Amusement
@@ -34,15 +40,15 @@ FORCE_FEATURE_COMPUTING = True
 # P  5 Excitement
 # N  6 Fear
 # N  7 Sad
-posIndices = [0, 2, 3, 5]
-negIndices = [1, 4, 6, 7]
-emotionsList = ['Amusement', 'Anger', 'Awe', 'Content', 'Disgust',\
-        'Excitement', 'Fear', 'Sadness']
+posIndices = [0, 1, 2, 3]
+negIndices = [4, 5, 6, 7]
+emotionsList = ['Amusement', 'Awe', 'Content', 'Excitement', 'Anger',\
+        'Disgust', 'Fear', 'Sadness']
 
 """ Returns (filenames, emotions) arrays from a csv file """
-def getData(truthFile):
+def getData():
     filenames, emotions = [],[]
-    with open(truthFile, 'r') as csvfile:
+    with open(LABEL_PATH, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='\'')
         next(reader, None) #Skip header
         for row in reader:
@@ -87,8 +93,8 @@ def emotionsFtoHlabels(emotionsF):
     print(classes)
     return MultiLabelBinarizer().fit_transform(classes)
 
-def getImages(filenames, dir = 'images/'):
-    return [io.imread(dir + f) for f in filenames]
+def getImages(filenames):
+    return [io.imread(IMDIR + f) for f in filenames]
 
 """
     Returns a trained model optimized for the NP problem
@@ -103,10 +109,11 @@ def NPModel(features, labels):
 
 def FModel(features, labels):
     clf = RandomForestClassifier(max_depth=64, n_estimators=32,\
-            max_features=20, n_jobs=-1)
+            max_features=20, n_jobs=-1, class_weight='balanced')
     #clf = svm.SVC()
     #clf = naive_bayes.GaussianNB()
     clf.fit(features, labels)
+    print("On training data : ",clf.score(features, labels))
     return clf
 
 """
@@ -143,7 +150,7 @@ def evaluate(prediction, labels, classes, display = True):
 def generateTrainedModel():
     #Get the data
     print("Fetching data...")
-    filenames, emotionsF = getData('groundTruth.csv');
+    filenames, emotionsF = getData();
     if MODE == 'NP':
         labels = emotionsFtoNPlabels(emotionsF)
     else :

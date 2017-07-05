@@ -7,6 +7,7 @@ from skimage import exposure
 from skimage import transform
 from skimage import color
 from skimage import feature
+from skimage import segmentation
 from scipy import stats
 
 def resizeToArea(im, goal=200000):
@@ -14,8 +15,7 @@ def resizeToArea(im, goal=200000):
     r = x / y
     ny = int(sqrt(goal / r))
     nx = int(r * ny)
-    return transform.resize(im, (nx, ny, 3), mode='constant'\
-            , preserve_range = True)
+    return transform.resize(im, (nx, ny, 3), mode='constant')
 
 """
     Features extraction taken from
@@ -26,6 +26,7 @@ def resizeToArea(im, goal=200000):
 def imageToFeatures(im):
     rim = resizeToArea(im)
     cim = color.rgb2hsv(rim) # TODO do not normalize saturation
+    patches = segmentation.felzenszwalb(cim)
     # TODO waterfall algorithm to segment the image
 
     colorF = colorFeatures(cim, rim)
@@ -107,7 +108,7 @@ def showDynamics(grey, lines):
 
 def dynamics(rim):
     grey = color.rgb2grey(rim)
-    edges = feature.canny(grey, sigma=7)
+    edges = feature.canny(grey, sigma=3.5)
     lines = transform.probabilistic_hough_line(edges)
     #showDynamics(grey, lines)
     nstatic, ndynamic = 0,0 
@@ -125,5 +126,8 @@ def dynamics(rim):
             ndynamic += 1
             ldynamic += length
     tot = len(lines)
-    return np.array([nstatic, ndynamic, nstatic / tot, ndynamic / tot,
+    if tot == 0:
+        return np.zeros(6)
+    else:
+        return np.array([nstatic, ndynamic, nstatic / tot, ndynamic / tot,
         lstatic, ldynamic])
