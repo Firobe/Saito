@@ -6,22 +6,16 @@ from features import imageToFeatures
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import io
-from sklearn.preprocessing import StandardScaler
+from sklearn import svm, naive_bayes, metrics
+from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
-from sklearn.model_selection import KFold
-from sklearn import svm
-from sklearn import naive_bayes
-from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn import metrics
-from sklearn.metrics import label_ranking_average_precision_score
+from sklearn.model_selection import KFold, GridSearchCV, cross_val_predict
 
 #   'NP' : positive or negative, two classes
 #   'F'  : full scale of emotions, eight classes
 MODE = 'F'
 #   If this is high, only the strongest images will be kept. 0 to disable
 STRONG_THRESHOLD = 0.0
-#   Number of splits in the K-fold
-KSPLITS = 10
 #   Compute features no matter if a dump already exists
 FORCE_FEATURE_COMPUTING = False
 #   Path to images
@@ -30,6 +24,8 @@ IMDIR = 'images/'
 #   Path to ground truth file
 #LABEL_PATH = 'mikels/IAPS.csv'
 LABEL_PATH = 'groundTruth.csv'
+#   Number of splits in cross-validation
+N_SPLITS = 5
 
 #Emotions :
 # P  0 Amusement
@@ -105,16 +101,28 @@ def NPModel(features, labels):
             max_features=20, n_jobs=-1, random_state=39, class_weight \
             = 'balanced')
     clf.fit(features, labels)
+    print("On training data : ",clf.score(features, labels))
     return clf
 
 def FModel(features, labels):
-    clf = RandomForestClassifier(max_depth=64, n_estimators=32,\
-            max_features=20, n_jobs=-1, class_weight='balanced')
+    clf = RandomForestClassifier()
     #clf = svm.SVC()
     #clf = naive_bayes.GaussianNB()
-    clf.fit(features, labels)
-    print("On training data : ",clf.score(features, labels))
-    return clf
+    print(features.shape)
+    param_grid = {"n_estimators": [16, 32, 64],
+              "max_depth": [4, None],
+              "max_features": [6, 8, 10, 20],
+              "min_samples_split": [2, 3, 4, 5, 10, 20],
+              "min_samples_leaf": [5, 10, 15, 20],
+              "bootstrap": [True, False],
+              "criterion": ["entropy"],
+              "class_weight": ["balanced", None]
+              }
+    search = GridSearchCV(clf, param_grid=param_grid, verbose=2, n_jobs=4,
+            cv=KFold(n_splits=N_SPLITS), refit = False)
+    search.fit(features, labels)
+    print(search.best_params_)
+    return RandomForestClassifier(**search.best_params_)
 
 """
     Displays a confusion matrix
@@ -122,6 +130,8 @@ def FModel(features, labels):
         /model_selection/plot_confusion_matrix.html'
 """
 def evaluate(prediction, labels, classes, display = True):
+    print(metrics.classification_report(
+        prediction, labels, target_names=classes))
     plt.figure()
     M = metrics.confusion_matrix(prediction, labels, range(len(classes))).T
     if display:
@@ -147,7 +157,7 @@ def evaluate(prediction, labels, classes, display = True):
         acc += M[i][i]
     return acc / len(labels)
 
-def generateTrainedModel():
+def getModelAndData():
     #Get the data
     print("Fetching data...")
     filenames, emotionsF = getData();
@@ -177,30 +187,17 @@ def generateTrainedModel():
         features = pickle.load(open('dumpFeatures.pickle', "rb"))
 
     print("Testing the model")
-    #10-fold testing
-    prediction, correct = [], []
-    kf = KFold(n_splits = KSPLITS)
-    for train_index, test_index in kf.split(features):
-        #Train the model
-        if MODE == 'NP':
-            model = NPModel(features[train_index], labels[train_index])
-        else:
-            model = FModel(features[train_index], labels[train_index])
-        prediction += list(model.predict(features[test_index]))
-
-        #Test the model
-        correct += list(labels[test_index])
-    return (prediction, correct)
+    #Select the model
+    model = FModel(features, labels)
+    return (model, features, labels)
 
 if __name__ == "__main__":
-    prediction, correct = generateTrainedModel()
+    model, features, labels = getModelAndData()
+    prediction = cross_val_predict(model, features, labels, cv = N_SPLITS)
     if MODE == 'NP':
-        acc = evaluate(prediction, correct, ['Positive', 'Negative'])
+        evaluate(prediction, labels, ['Positive', 'Negative'])
     else:
-        #print(prediction)
-        #print(label_ranking_average_precision_score(correct, prediction))
-        acc = evaluate(prediction, correct, emotionsList)
-        simpleP = list(map(lambda x: x in negIndices, prediction))
-        simpleC = list(map(lambda x: x in negIndices, correct))
-        #acc = evaluate(simpleP, simpleC, ['Positive', 'Negative'])
-    print("ACCURACY : ", acc)
+        evaluate(prediction, labels, emotionsList)
+    #    #simpleP = list(map(lambda x: x in negIndices, prediction))
+    #    #simpleC = list(map(lambda x: x in negIndices, correct))
+    #    #acc = evaluate(simpleP, simpleC, ['Positive', 'Negative'])
