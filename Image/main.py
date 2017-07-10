@@ -2,6 +2,8 @@
 import csv, random, pickle, os.path, multiprocessing, itertools
 from joblib import Parallel, delayed
 from features import imageToFeatures
+from models import *
+from config import *
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,22 +12,6 @@ from sklearn import svm, naive_bayes, metrics
 from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.model_selection import KFold, GridSearchCV, cross_val_predict
-
-#   'NP' : positive or negative, two classes
-#   'F'  : full scale of emotions, eight classes
-MODE = 'F'
-#   If this is high, only the strongest images will be kept. 0 to disable
-STRONG_THRESHOLD = 0.0
-#   Compute features no matter if a dump already exists
-FORCE_FEATURE_COMPUTING = False
-#   Path to images
-#IMDIR = 'iaps/'
-IMDIR = 'images/'
-#   Path to ground truth file
-#LABEL_PATH = 'mikels/IAPS.csv'
-LABEL_PATH = 'groundTruth.csv'
-#   Number of splits in cross-validation
-N_SPLITS = 5
 
 #Emotions :
 # P  0 Amusement
@@ -93,38 +79,6 @@ def getImages(filenames):
     return [io.imread(IMDIR + f) for f in filenames]
 
 """
-    Returns a trained model optimized for the NP problem
-"""
-def NPModel(features, labels):
-    #old = 64
-    clf = RandomForestClassifier(max_depth=4, n_estimators=64,\
-            max_features=20, n_jobs=-1, random_state=39, class_weight \
-            = 'balanced')
-    clf.fit(features, labels)
-    print("On training data : ",clf.score(features, labels))
-    return clf
-
-def FModel(features, labels):
-    clf = RandomForestClassifier()
-    #clf = svm.SVC()
-    #clf = naive_bayes.GaussianNB()
-    print(features.shape)
-    param_grid = {"n_estimators": [16, 32, 64],
-              "max_depth": [4, None],
-              "max_features": [6, 8, 10, 20],
-              "min_samples_split": [2, 3, 4, 5, 10, 20],
-              "min_samples_leaf": [5, 10, 15, 20],
-              "bootstrap": [True, False],
-              "criterion": ["entropy"],
-              "class_weight": ["balanced", None]
-              }
-    search = GridSearchCV(clf, param_grid=param_grid, verbose=2, n_jobs=4,
-            cv=KFold(n_splits=N_SPLITS), refit = False)
-    search.fit(features, labels)
-    print(search.best_params_)
-    return RandomForestClassifier(**search.best_params_)
-
-"""
     Displays a confusion matrix
     Inspired from 'http://scikit-learn.org/stable/auto_examples
         /model_selection/plot_confusion_matrix.html'
@@ -132,6 +86,7 @@ def FModel(features, labels):
 def evaluate(prediction, labels, classes, display = True):
     print(metrics.classification_report(
         prediction, labels, target_names=classes))
+    print("Accuracy score : ", metrics.accuracy_score(labels, prediction))
     plt.figure()
     M = metrics.confusion_matrix(prediction, labels, range(len(classes))).T
     if display:
@@ -188,7 +143,7 @@ def getModelAndData():
 
     print("Testing the model")
     #Select the model
-    model = FModel(features, labels)
+    model = getModel(MODEL_NAME, features, labels)
     return (model, features, labels)
 
 if __name__ == "__main__":
