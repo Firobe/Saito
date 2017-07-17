@@ -1,6 +1,8 @@
 from sklearn import svm, naive_bayes, metrics
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.model_selection import KFold, GridSearchCV, cross_val_predict
+from sklearn.naive_bayes import GaussianNB
+from sklearn.multiclass import OneVsRestClassifier
 import numpy as np
 from config import *
 
@@ -9,11 +11,11 @@ from config import *
 """
 def NP_RandomForest(features, labels):
     #old = 64
-    clf = RandomForestClassifier(max_depth=4, n_estimators=64,\
-            max_features=20, n_jobs=-1, random_state=39, class_weight \
+    clf = RandomForestClassifier(max_depth=4, n_estimators=64,
+            max_features=20, n_jobs=4, random_state=39, class_weight
             = 'balanced')
-    clf.fit(features, labels)
-    print("On training data : ",clf.score(features, labels))
+    #clf.fit(features, labels)
+    #print("On training data : ",clf.score(features, labels))
     return clf
 
 def F_RandomForestGrid(features, labels):
@@ -35,6 +37,9 @@ def F_RandomForestGrid(features, labels):
     search.fit(features, labels)
     print(search.best_params_)
     return RandomForestClassifier(**search.best_params_)
+
+def F_OVR(features, labels):
+    return OneVsRestClassifier(GaussianNB(), n_jobs = 4)
 
 def getModel(name, features, labels):
     return globals()[name](features, labels)
