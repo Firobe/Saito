@@ -28,7 +28,7 @@ def resizeToArea(im, goal=200000):
 def imageToFeatures(im):
     rim = resizeToArea(im)
     cim = color.rgb2hsv(rim) # TODO do not normalize saturation
-    segments = segmentation(cim[:,:,0])
+    #segments = segmentation(cim[:,:,0])
     #print(segments)
 
     colorF = colorFeatures(cim, rim)

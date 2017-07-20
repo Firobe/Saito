@@ -6,16 +6,16 @@ from sklearn.multiclass import OneVsRestClassifier
 import numpy as np
 from config import *
 
-"""
-    Returns a trained model optimized for the NP problem
-"""
+################################
+#    Returns non-trained models
+################################
+
+
 def NP_RandomForest(features, labels):
     #old = 64
     clf = RandomForestClassifier(max_depth=4, n_estimators=64,
             max_features=20, n_jobs=4, random_state=39, class_weight
             = 'balanced')
-    #clf.fit(features, labels)
-    #print("On training data : ",clf.score(features, labels))
     return clf
 
 def F_RandomForestGrid(features, labels):

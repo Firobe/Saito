@@ -27,7 +27,9 @@ negIndices = [4, 5, 6, 7]
 emotionsList = ['Amusement', 'Awe', 'Content', 'Excitement', 'Anger',\
         'Disgust', 'Fear', 'Sadness']
 
-""" Returns (filenames, emotions) arrays from a csv file """
+"""
+    Returns (filenames, emotions) arrays from a csv file
+"""
 def getData():
     filenames, emotions = [],[]
     with open(LABEL_PATH, 'r') as csvfile:
@@ -46,16 +48,30 @@ def emotionsFtoNP(emotionsF):
     return [sum([emotionsF[i] for i in posIndices]),\
             sum([emotionsF[i] for i in negIndices])];
 
+"""
+    Remove images where the main emotion
+    is not decisive (using STRONG_THRESHOLD)
+"""
 def filterWeakEmotions(emotions):
     return [e.max() > e.sum() * STRONG_THRESHOLD for e in emotions]
 
+"""
+    Applies argMax to hot vectors
+"""
 def compressEmotions(emotions):
     return np.array(list((map(np.argmax, emotions))))
 
+"""
+    Transform hot vectors of 8 emotions to hot
+    vectors of 2 emotions (N, P)
+"""
 def emotionsFtoNPlabels(emotionsF):
     emotionsNP = [emotionsFtoNP(e) for e in emotionsF]
     return compressEmotions(emotionsNP)
 
+"""
+    Unused
+"""
 def emotionsFtoH(emotionsF, threshold = 0.6):
     ret = []
     s = sum(emotionsF)
@@ -70,11 +86,9 @@ def emotionsFtoH(emotionsF, threshold = 0.6):
     return ret
 
 
-def emotionsFtoHlabels(emotionsF):
-    classes = list(map(emotionsFtoH, emotionsF))
-    print(classes)
-    return MultiLabelBinarizer().fit_transform(classes)
-
+"""
+    Reads images from filenames
+"""
 def getImages(filenames):
     return [io.imread(IMDIR + f) for f in filenames]
 
@@ -112,6 +126,10 @@ def evaluate(prediction, labels, classes, display = True):
         acc += M[i][i]
     return acc / len(labels)
 
+"""
+    Returns model, features and labels according to
+    parameters in config.py
+"""
 def getModelAndData():
     #Get the data
     print("Fetching data...")
@@ -130,9 +148,9 @@ def getModelAndData():
         print("Computing features...")
         images = getImages(filenames)
         num_cores = multiprocessing.cpu_count()
-        #features = np.array(Parallel(n_jobs=num_cores)\
-        #        (delayed(imageToFeatures)(i) for i in images))
-        features = np.array([imageToFeatures(i) for i in images])
+        features = np.array(Parallel(n_jobs=num_cores)\
+                (delayed(imageToFeatures)(i) for i in images))
+        #features = np.array([imageToFeatures(i) for i in images])
         scaler = StandardScaler();
         print(features.shape)
         scaler.fit_transform(features)
@@ -154,6 +172,3 @@ if __name__ == "__main__":
         evaluate(prediction, labels, ['Positive', 'Negative'])
     else:
         evaluate(prediction, labels, emotionsList)
-    #    #simpleP = list(map(lambda x: x in negIndices, prediction))
-    #    #simpleC = list(map(lambda x: x in negIndices, correct))
-    #    #acc = evaluate(simpleP, simpleC, ['Positive', 'Negative'])
