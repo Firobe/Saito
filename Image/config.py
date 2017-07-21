@@ -2,7 +2,7 @@
 #   'F'  : full scale of emotions, eight classes
 MODE = 'F'
 #   If this is high, only the strongest images will be kept. 0 to disable
-STRONG_THRESHOLD = 0
+STRONG_THRESHOLD = 0.7
 #   Compute features no matter if a dump already exists
 FORCE_FEATURE_COMPUTING = False
 #   Path to images

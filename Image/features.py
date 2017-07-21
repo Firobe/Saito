@@ -9,8 +9,10 @@ from skimage import color
 from skimage import feature
 from skimage import morphology 
 from skimage import filters
+from skimage import img_as_ubyte
 from scipy import stats, ndimage
 from igraph import *
+import warnings
 
 def resizeToArea(im, goal=200000):
     x, y = im.shape[0], im.shape[1]
@@ -28,8 +30,7 @@ def resizeToArea(im, goal=200000):
 def imageToFeatures(im):
     rim = resizeToArea(im)
     cim = color.rgb2hsv(rim) # TODO do not normalize saturation
-    #segments = segmentation(cim[:,:,0])
-    #print(segments)
+    segments = segmentation(cim)
 
     colorF = colorFeatures(cim, rim)
     textureF = textureFeatures(cim)
@@ -46,19 +47,26 @@ def imageToFeatures(im):
         Fast implementation of waterfall based on graphs
         Marcotegui, Beucher
 """
-def segmentation(im):
+def segmentation(orim):
     # Watershed
+    with warnings.catch_warnings(): # Ignore precision warning
+        warnings.simplefilter("ignore")
+        im = img_as_ubyte(orim[:,:,0])
     fim = filters.rank.median(im, morphology.disk(2))
     gradient = filters.rank.gradient(fim, morphology.disk(2))
     basins = watershed(fim, gradient)
     areas, labels = exposure.histogram(basins)
-    minimas = [int(fim[basins == v].min()) for v in labels]
-    graph = graphFromBasins(basins, labels, minimas)
+    # TODO Figure out what image to send here
+    graph = graphFromBasins(basins, labels, im)
+
+    #layout = graph.layout("kk")
+    #plot(graph, layout=layout)
+
     spanning = graph.spanning_tree()
     waterfall(spanning)
-    #plt.imshow(graph)
-    #plt.show()
-    showSegmentation(im, basins)
+    reduced = simplify(basins, spanning)
+    showSegmentation(orim, gradient, basins, reduced)
+    return reduced
 
 """
     Performs watershed analysis.
@@ -75,6 +83,17 @@ def watershed(fim, gradient):
 def gSym(i, j):
     return (j, i) if i > j else (i, j)
 
+# Update graph (for graphFromBasins) with correct edge valuation
+def updateGraph(graph, ind1, ind2, basins, fim):
+    val1 = basins[ind1] - 1
+    val2 = basins[ind2] - 1
+    if val1 != val2:
+        # TODO Is it really the good value ?
+        diff = abs(int(fim[ind1]) - int(fim[ind2]))
+        ind = gSym(val1, val2)
+        if diff != 0 and (graph[ind] == 0 or graph[ind] > diff):
+            graph[ind] = diff if diff != 0 else 1
+
 """
     Create an undirected graph from the results
     of the watershed analysis. Each vertex is a basin.
@@ -82,29 +101,21 @@ def gSym(i, j):
     are adjacent, and the value of the edge of the absolute difference
     between the minimum values of each basin.
 """
-def graphFromBasins(basins, labels, minimas):
+def graphFromBasins(basins, labels, fim):
+    # TODO Maybe implement watershed and generate the graph there
     L = len(labels)
     n, m = basins.shape
     graph = np.zeros((L, L))
     for i in range(n):
         for j in range(m):
-            curVal = basins[i,j] - 1
             if j + 1 < m:
-                ind = gSym(curVal, basins[i, j + 1] - 1) #E
-                if graph[ind] == 0:
-                    graph[ind] = abs(minimas[ind[0]] - minimas[ind[1]])
+                updateGraph(graph, (i,j), (i, j + 1), basins, fim)
             if i + 1 < n:
-                ind = gSym(curVal, basins[i + 1, j]  - 1) #S
-                if graph[ind] == 0:
-                    graph[ind] = abs(minimas[ind[0]] - minimas[ind[1]])
+                updateGraph(graph, (i,j), (i + 1, j), basins, fim)
             if i + 1 < n and j + 1 < m:
-                ind = gSym(curVal, basins[i + 1, j + 1] - 1) #SE
-                if graph[ind] == 0:
-                    graph[ind] = abs(minimas[ind[0]] - minimas[ind[1]])
+                updateGraph(graph, (i,j), (i + 1, j + 1), basins, fim)
             if i + 1 < n and j - 1 >= 0:
-                ind = gSym(curVal, basins[i + 1, j - 1] - 1) #SW
-                if graph[ind] == 0:
-                    graph[ind] = abs(minimas[ind[0]] - minimas[ind[1]])
+                updateGraph(graph, (i,j), (i + 1, j - 1), basins, fim)
     
     return Graph.Weighted_Adjacency(graph.tolist(), mode = ADJ_UPPER,
             attr = "weight", loops = False)
@@ -144,9 +155,6 @@ def waterfall(spanning):
     # Some areas are left unlabelled in the original graph
     # Propagate the labels to unlabelled areas the finish the partition
     propagate(spanning)
-    print("OALAALAL3")
-    for v in spanning.vs:
-        print(v["label"])
 
 # Check if two edges have a vertex in common
 def areIncident(e1, e2):
@@ -167,8 +175,20 @@ def propagate(g):
         if s["label"] != t["label"]: #XOR
             if s["label"]: t["label"] = s["label"]
             else: s["label"] = t["label"]
-    # TOUT N'EST PAS LABELLED
-    # ESSAYER DE DESSINER LE GRAPHE AVANT
+
+"""
+    Given a graph with a 'label' attribute on each vertex
+    Simplify a basins matrix
+"""
+def simplify(basins, g):
+    R = basins.copy()
+    for i in range(R.shape[0]):
+        for j in range(R.shape[1]):
+            if g.vs[R[i,j] - 1]["label"]:
+                R[i,j] = g.vs[R[i,j] - 1]["label"] + 1
+            else:
+                R[i,j] = 0
+    return R
 
 """
     Check if an edge is surrounded only by edges with superior valuation
@@ -186,10 +206,20 @@ def checkMinimum(spanning, E):
     Display the segmentation of an image, with a color attributed to each
     label. Labels must be an image with a label on each pixel.
 """
-def showSegmentation(image, labels):
+def showSegmentation(orig, image, b1, b2):
+    fig = plt.figure()
+    a = fig.add_subplot(1,4,1)
+    plt.imshow(color.hsv2rgb(orig))
+    plt.title("Original")
+    a = fig.add_subplot(1,4,2)
     plt.imshow(image, cmap=plt.cm.gray, interpolation='nearest')
-    plt.imshow(labels, cmap=plt.cm.spectral, interpolation='nearest', alpha=.7)
-    plt.title("Segmented")
+    plt.title("Gradient")
+    a = fig.add_subplot(1,4,3)
+    plt.imshow(b1, cmap=plt.cm.spectral, interpolation='nearest')
+    a.set_title("Watershed")
+    a = fig.add_subplot(1,4,4)
+    plt.imshow(b2, cmap=plt.cm.spectral, interpolation='nearest')
+    a.set_title("Waterfall")
     plt.show()
 
 ################################################## COLOR FEATURES
@@ -251,6 +281,7 @@ def textureFeatures(cim):
 ################################################ COMPOS. FEATURES
 
 def compositionFeatures(rim):
+    # TODO Level of detail
     return dynamics(rim)
 
 def showDynamics(grey, lines):
