@@ -14,6 +14,31 @@ from scipy import stats, ndimage
 from igraph import *
 import warnings
 
+"""
+    Affective Image Classification using Features
+    Inspired byPsychology and Art Theory, Machajdik
+"""
+
+def imageToFeatures(im):
+    rim = resizeToArea(im)
+    cim = toCylindrical(rim)
+    #cim = color.rgb2hsv(rim)
+    segments = segmentation(cim)
+    segments = np.array([1, 2])
+
+    colorF = colorFeatures(cim, rim, segments)
+    textureF = textureFeatures(cim)
+    compositionF = compositionFeatures(rim, segments)
+    print(".", end = "")
+    sys.stdout.flush();
+    return np.concatenate((colorF, textureF, compositionF))
+
+"""
+    #################
+    # PREPROCESSING #
+    #################
+"""
+################################################## RESIZE
 def resizeToArea(im, goal=200000):
     x, y = im.shape[0], im.shape[1]
     r = x / y
@@ -21,31 +46,36 @@ def resizeToArea(im, goal=200000):
     nx = int(r * ny)
     return transform.resize(im, (nx, ny, 3), mode='constant')
 
-"""
-    Features extraction taken from
-        Affective Image Classification using Features
-        Inspired byPsychology and Art Theory, Machajdik
-"""
+################################################## COLOR SPACE TRANSFORM
 
-def imageToFeatures(im):
-    rim = resizeToArea(im)
-    cim = color.rgb2hsv(rim) # TODO do not normalize saturation
-    segments = segmentation(cim)
+def toCylindrical(im):
+    cim = im.copy()
+    for i in range(im.shape[0]):
+        for j in range(im.shape[1]):
+            cim[i,j] = RGBtoHSY(im[i,j])
+    return cim
 
-    colorF = colorFeatures(cim, rim)
-    textureF = textureFeatures(cim)
-    compositionF = compositionFeatures(rim)
-    print(".", end = "")
-    sys.stdout.flush();
-    return np.concatenate((colorF, textureF, compositionF))
+"""
+    Constructing Cylindrical Coordinate Colour Spaces,
+    Hanbury
+"""
+def RGBtoHSY(pixel):
+    R, G, B = pixel[0] * 255, pixel[1] * 255, pixel[2] * 255
+    H = degrees(atan2(sqrt(3) * (G - B), 2 * R - G - B))
+    S = max([R, G, B]) - min([R, G, B])
+    Y =  (R + G + B) / 3.
+    # H [-180, 180] (degrees)
+    # S [0, 255]
+    # Y [0, 255]
+    return np.array([(H + 180) / 360., S / 255., Y / 255.])
+
 
 ################################################## SEGMENTATION
 
 """
-    Segmentation functions, based on
-        http://cmm.ensmp.fr/~beucher/publi/marcotegui_waterfalls_ismm05.pdf
-        Fast implementation of waterfall based on graphs
-        Marcotegui, Beucher
+    Fast implementation of waterfall based on graphs,
+    Marcotegui, Beucher
+    http://cmm.ensmp.fr/~beucher/publi/marcotegui_waterfalls_ismm05.pdf
 """
 def segmentation(orim):
     # Watershed
@@ -84,12 +114,12 @@ def gSym(i, j):
     return (j, i) if i > j else (i, j)
 
 # Update graph (for graphFromBasins) with correct edge valuation
-def updateGraph(graph, ind1, ind2, basins, fim):
+def updateGraph(graph, ind1, ind2, basins, im):
     val1 = basins[ind1] - 1
     val2 = basins[ind2] - 1
     if val1 != val2:
         # TODO Is it really the good value ?
-        diff = abs(int(fim[ind1]) - int(fim[ind2]))
+        diff = abs(int(im[ind1]) - int(im[ind2]))
         ind = gSym(val1, val2)
         if diff != 0 and (graph[ind] == 0 or graph[ind] > diff):
             graph[ind] = diff if diff != 0 else 1
@@ -101,21 +131,20 @@ def updateGraph(graph, ind1, ind2, basins, fim):
     are adjacent, and the value of the edge of the absolute difference
     between the minimum values of each basin.
 """
-def graphFromBasins(basins, labels, fim):
-    # TODO Maybe implement watershed and generate the graph there
+def graphFromBasins(basins, labels, im):
     L = len(labels)
     n, m = basins.shape
     graph = np.zeros((L, L))
     for i in range(n):
         for j in range(m):
             if j + 1 < m:
-                updateGraph(graph, (i,j), (i, j + 1), basins, fim)
+                updateGraph(graph, (i,j), (i, j + 1), basins, im)
             if i + 1 < n:
-                updateGraph(graph, (i,j), (i + 1, j), basins, fim)
+                updateGraph(graph, (i,j), (i + 1, j), basins, im)
             if i + 1 < n and j + 1 < m:
-                updateGraph(graph, (i,j), (i + 1, j + 1), basins, fim)
+                updateGraph(graph, (i,j), (i + 1, j + 1), basins, im)
             if i + 1 < n and j - 1 >= 0:
-                updateGraph(graph, (i,j), (i + 1, j - 1), basins, fim)
+                updateGraph(graph, (i,j), (i + 1, j - 1), basins, im)
     
     return Graph.Weighted_Adjacency(graph.tolist(), mode = ADJ_UPPER,
             attr = "weight", loops = False)
@@ -163,6 +192,8 @@ def areIncident(e1, e2):
             e1.target == e2.source or
             e1.target == e2.target)
 
+def hasA(t, a):
+    return a in t.attributes() and t[a] != None
 
 """
     Propagate the labels on the spanning tree
@@ -172,8 +203,8 @@ def propagate(g):
     ses = sorted(g.es, key = lambda v: v["weight"])
     for e in ses:
         s, t = g.vs[e.source], g.vs[e.target]
-        if s["label"] != t["label"]: #XOR
-            if s["label"]: t["label"] = s["label"]
+        if hasA(s, "label") != hasA(t, "label"): #XOR
+            if hasA(s, "label"): t["label"] = s["label"]
             else: s["label"] = t["label"]
 
 """
@@ -184,7 +215,7 @@ def simplify(basins, g):
     R = basins.copy()
     for i in range(R.shape[0]):
         for j in range(R.shape[1]):
-            if g.vs[R[i,j] - 1]["label"]:
+            if hasA(g.vs[R[i,j] - 1], "label"):
                 R[i,j] = g.vs[R[i,j] - 1]["label"] + 1
             else:
                 R[i,j] = 0
@@ -222,17 +253,22 @@ def showSegmentation(orig, image, b1, b2):
     a.set_title("Waterfall")
     plt.show()
 
+"""
+    ############
+    # FEATURES #
+    ############
+"""
 ################################################## COLOR FEATURES
-def colorFeatures(cim, rim):
+def colorFeatures(cim, rim, segments):
     saturation = cim[:,:,1].mean()
     brightness = cim[:,:,2].mean()
     pad = PAD(saturation, brightness)
     hue = hueStatistics(cim)
     # TODO Colorfulness
     colorHisto = colorNames(rim)
-    # TODO Itten
+    ittenF = itten(segments)
     return np.concatenate(([saturation, brightness], \
-            pad, hue, colorHisto))
+            pad, hue, colorHisto, ittenF))
 
 """
     Pleasure / Arousal / Dominance
@@ -253,10 +289,14 @@ def hueStatistics(im):
     ws = stats.circstd(w)
     return [m, s, wm, ws]
 
+"""
+    Learning Color Names from Real-World Images,
+    Joost Van de Weijer, Cordelia Schmid, Jakob Verbeek
+"""
 def colorNames(im):
-    index_im = (np.floor(im[:,:,0] / 8) \
-            + 32 * np.floor(im[:,:,1] / 8) \
-            + 32 * 32 * np.floor(im[:,:,2] / 8)).flatten()
+    index_im = (np.floor(im[:,:,0] * 255. / 8) \
+            + 32 * np.floor(im[:,:,1] * 255. / 8) \
+            + 32 * 32 * np.floor(im[:,:,2] * 255. / 8)).flatten()
     colors = colorData[index_im.astype(int)]
     histogram = np.bincount(colors, minlength=11)
     return histogram
@@ -273,6 +313,9 @@ def getColorData(filename="w2c.txt"):
 
 colorData = getColorData()
 
+def itten(segments):
+    return []#segments.flatten()
+
 ################################################ TEXTURE FEATURES
 
 def textureFeatures(cim):
@@ -280,9 +323,16 @@ def textureFeatures(cim):
 
 ################################################ COMPOS. FEATURES
 
-def compositionFeatures(rim):
-    # TODO Level of detail
-    return dynamics(rim)
+def compositionFeatures(rim, segments):
+    dynamicsF = dynamics(rim)
+    LODF = LOD(segments)
+    return np.concatenate((dynamicsF, LODF))
+    #return dynamicsF
+
+# Level of Detail
+def LOD(segments):
+    _, labels = exposure.histogram(segments)
+    return [len(labels)]
 
 def showDynamics(grey, lines):
     #Show detected lines
