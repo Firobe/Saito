@@ -148,9 +148,9 @@ def getModelAndData():
         print("Computing features...")
         images = getImages(filenames)
         num_cores = multiprocessing.cpu_count()
-        features = np.array(Parallel(n_jobs=num_cores)\
-                (delayed(imageToFeatures)(i) for i in images))
-        #features = np.array([imageToFeatures(i) for i in images])
+        #features = np.array(Parallel(n_jobs=num_cores)\
+        #        (delayed(imageToFeatures)(i) for i in images))
+        features = np.array([imageToFeatures(i) for i in images])
         scaler = StandardScaler();
         print(features.shape)
         scaler.fit_transform(features)
@@ -162,7 +162,7 @@ def getModelAndData():
 
     print("Testing the model")
     #Select the model
-    model = getModel(MODEL_NAME, features, labels)
+    model = getModel(MODE + "_" + MODEL_NAME, features, labels)
     return (model, features, labels)
 
 if __name__ == "__main__":

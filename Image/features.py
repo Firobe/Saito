@@ -14,6 +14,8 @@ from scipy import stats, ndimage
 from igraph import *
 import warnings
 
+# TODO Feature selection
+
 """
     Affective Image Classification using Features
     Inspired byPsychology and Art Theory, Machajdik
@@ -23,10 +25,9 @@ def imageToFeatures(im):
     rim = resizeToArea(im)
     cim = toCylindrical(rim)
     #cim = color.rgb2hsv(rim)
-    segments = segmentation(cim)
-    segments = np.array([1, 2])
+    segments, nSeg = segmentation(cim)
 
-    colorF = colorFeatures(cim, rim, segments)
+    colorF = colorFeatures(cim, rim, (segments, nSeg))
     textureF = textureFeatures(cim)
     compositionF = compositionFeatures(rim, segments)
     print(".", end = "")
@@ -93,10 +94,10 @@ def segmentation(orim):
     #plot(graph, layout=layout)
 
     spanning = graph.spanning_tree()
-    waterfall(spanning)
+    n = waterfall(spanning)
     reduced = simplify(basins, spanning)
-    showSegmentation(orim, gradient, basins, reduced)
-    return reduced
+    #showSegmentation(orim, gradient, basins, reduced)
+    return (reduced, n)
 
 """
     Performs watershed analysis.
@@ -184,6 +185,7 @@ def waterfall(spanning):
     # Some areas are left unlabelled in the original graph
     # Propagate the labels to unlabelled areas the finish the partition
     propagate(spanning)
+    return curLabel
 
 # Check if two edges have a vertex in common
 def areIncident(e1, e2):
@@ -266,7 +268,7 @@ def colorFeatures(cim, rim, segments):
     hue = hueStatistics(cim)
     # TODO Colorfulness
     colorHisto = colorNames(rim)
-    ittenF = itten(segments)
+    ittenF = itten(cim, segments)
     return np.concatenate(([saturation, brightness], \
             pad, hue, colorHisto, ittenF))
 
@@ -313,8 +315,72 @@ def getColorData(filename="w2c.txt"):
 
 colorData = getColorData()
 
-def itten(segments):
-    return []#segments.flatten()
+# Itten colors features
+def itten(cim, segments):
+    s, n = segments[0], segments[1]
+    # Average H, S, B of each segment
+    hSegs = np.array([cim[s == i][:,0].mean() for i in range(n)])
+    sSegs = np.array([cim[s == i][:,1].mean() for i in range(n)])
+    bSegs = np.array([cim[s == i][:,2].mean() for i in range(n)])
+    size = [sum((s == i).flatten()) for i in range(n)]
+    ittenLight = membership(bSegs)
+    print(ittenLight)
+    return []
+
+"""
+    Image Retrieval by Emotional Semantics:
+        A Study of Emotional Space and Feature Extraction,
+    Wang et al.
+    http://ieeexplore.ieee.org/xpls/icp.jsp?arnumber=4274431
+"""
+def membership(x):
+    n = len(x)
+    # STEP 1
+    c = np.zeros(7)
+    c[0] = min(x)
+    c[6] = max(x)
+    for j in range(1, 6):
+        c[j] = c[0] + j * (c[6] + c[0]) / 6.
+
+    # STEP 2
+    while True:
+        print(c)
+        backup = c.copy()
+        U = np.zeros((n, 5))
+        for i in range(n):
+            for j in range(1, 6):
+                # Rule 1
+                if x[i] <= c[1]:
+                    r = 1 if j == 1 else 0
+                # Rule 2
+                elif x[i] > c[5]:
+                    r = 0 if j != 5 else 1
+                # Rule 3
+                else:
+                    k = interv(c, x[i])
+                    v = (c[k + 1] - x[i]) / (c[k + 1] - c[k])
+                    if j == k: r = v
+                    elif j == k + 1: r = 1 - v
+                    else: r = 0
+                U[i, j - 1] = r
+        # STEP 3
+        for j in range(1, 6):
+            s1 = sum(U[:,j - 1] * x)
+            s2 = sum(U[:,j - 1])
+            c[j] = s1 / s2
+        if (np.abs(backup - c) < 0.01).all():
+            break
+    return U
+
+
+# Given c = [c_1, ..., c_n] (sorted) and x
+# such that c_1 < x <= c_n
+# Returns j such that c_j < x <= c_(j+1)
+# TODO binary search
+def interv(c, x):
+    for j in range(1, len(c) - 2):
+        if c[j] < x and x <= c[j + 1]:
+            return j
 
 ################################################ TEXTURE FEATURES
 

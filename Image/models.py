@@ -7,7 +7,13 @@ import numpy as np
 from config import *
 
 ################################
-#    Returns non-trained models
+#   Returns non-trained models
+#   Functions should be named 
+#   M_N
+#   With M begin the mode
+#       (either 'F' or 'NP')
+#   And N being the name
+#       (cf. MODEL_NAME)
 ################################
 
 
