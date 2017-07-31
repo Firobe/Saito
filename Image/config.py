@@ -2,9 +2,11 @@
 #   'F'  : full scale of emotions, eight classes
 MODE = 'F'
 #   If this is high, only the strongest images will be kept. 0 to disable
-STRONG_THRESHOLD = 0.
+STRONG_THRESHOLD = 0.4
 #   Compute features no matter if a dump already exists
 FORCE_FEATURE_COMPUTING = False
+#   If the feature computing should be done on multiple cores
+PARALLEL_FEATURES = True
 #   Path to images
 #IMDIR = 'iaps/'
 IMDIR = 'images/'
@@ -16,4 +18,3 @@ N_SPLITS = 5
 #   Name of model function
 #   The called function will be '{MODE}_{MODEL_NAME}'
 MODEL_NAME = 'OVR'
-

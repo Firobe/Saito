@@ -20,7 +20,6 @@ from segmentation import *
 def imageToFeatures(im):
     rim = resizeToArea(im)
     cim = toCylindrical(rim)
-    #cim = color.rgb2hsv(rim)
     segments, nSeg = segmentation(cim)
 
     colorF = colorFeatures(cim, rim, (segments, nSeg))
@@ -65,6 +64,7 @@ def RGBtoHSY(pixel):
     # H [-180, 180] (degrees)
     # S [0, 255]
     # Y [0, 255]
+    # Each component is fit into [0,1]
     return np.array([(H + 180) / 360., S / 255., Y / 255.])
 
 # See segmentation.py

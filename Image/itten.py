@@ -6,16 +6,22 @@ def itten(cim, segments):
     s, n = segments[0], segments[1]
     size, labels = exposure.histogram(s)
     # Average H, S, B of each segment
-    hSegs = np.array([cim[s == i][:,0].mean() for i in labels])
+    hues = np.array([cim[s == i][:,0].mean() * 360 for i in labels])
     sSegs = np.array([cim[s == i][:,1].mean() for i in labels])
     bSegs = np.array([cim[s == i][:,2].mean() for i in labels])
 
     # Translate to itten model
     ittenLight = lightMembership(bSegs)
     ittenSat = satMembership(sSegs)
-    ittenHues = np.array(
-            [11 if h == 1 else np.floor(h * 12) for h in hSegs])
-    return []
+
+    # TODO Max ?
+    lightDarkC = standardContrast(ittenLight, size)
+    saturationC = standardContrast(ittenSat, size)
+    # TODO Contrast of hues (vector-based measure of hue spread ??)
+    complementCA, complementCM = complementsContrast(hues)
+    #warmColdC = warmColdContrast(hues)
+    return np.array([lightDarkC, saturationC, complementCA,
+        complementCM])
 
 """
     Image Retrieval by Emotional Semantics:
@@ -23,6 +29,8 @@ def itten(cim, segments):
     Wang et al.
     http://ieeexplore.ieee.org/xpls/icp.jsp?arnumber=4274431
 """
+# Label each value of x (in [0,1]) with a label in [[0,5]]
+# (from very dark to very light)
 def lightMembership(x):
     n = len(x)
     # STEP 1
@@ -75,6 +83,8 @@ def lightMembership(x):
         R[i] = U[i].argmax()
     return R
 
+# Label each value of x (in [0,1]) with 0, 1, 2
+# (low sat, middle sat, high sat)
 def satMembership(x):
     n = len(x)
     U = np.zeros((n, 3))
@@ -108,3 +118,27 @@ def interv(c, x):
     for j in range(1, len(c) - 2):
         if c[j] < x and x <= c[j + 1]:
             return j
+
+# Weighted standard deviation on values
+def standardContrast(values, weights):
+    av = np.average(values, weights = weights)
+    var = np.average((values - av) ** 2, weights = weights)
+    return np.sqrt(var)
+
+# Returns average and maximal difference of hue
+def complementsContrast(hues):
+    n = len(hues)
+    if n == 1: return (0, 0)
+    S = 0
+    M = 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            ad = abs(hues[i] - hues[j])
+            d = min(ad, 360 - ad)
+            S += d
+            if d > M: M = d
+    return ((2 * S) / (n ** 2 - n), M)
+
+# TODO
+def warmColdContradt(hues):
+    return 0

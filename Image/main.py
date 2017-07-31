@@ -148,9 +148,11 @@ def getModelAndData():
         print("Computing features...")
         images = getImages(filenames)
         num_cores = multiprocessing.cpu_count()
-        #features = np.array(Parallel(n_jobs=num_cores)\
-        #        (delayed(imageToFeatures)(i) for i in images))
-        features = np.array([imageToFeatures(i) for i in images])
+        if PARALLEL_FEATURES:
+            features = np.array(Parallel(n_jobs=num_cores)\
+                    (delayed(imageToFeatures)(i) for i in images))
+        else:
+            features = np.array([imageToFeatures(i) for i in images])
         scaler = StandardScaler();
         print(features.shape)
         scaler.fit_transform(features)
