@@ -35,6 +35,13 @@ def download(url, file):
         data = urllib.request.urlopen(url).read()
         f.write(data)
 
+"""
+    This script will download metadata from the NicoNico set
+    and filter only videos using which are music and have at least 500
+    comments. It will then download only the comments of these videos.
+
+    Uses config.py
+"""
 # Get every "category" existing
 categories = retrieveCategories()
 for cat in categories:
