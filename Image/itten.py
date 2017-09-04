@@ -5,6 +5,12 @@ from skimage import exposure
 def itten(cim, segments):
     s, n = segments[0], segments[1]
     size, labels = exposure.histogram(s)
+    n = len(size)
+    #Delete empty bins
+    toDel = [i for i in range(n) if size[i] == 0]
+    size = [size[i] for i in range(n) if not (i in toDel)]
+    labels = [labels[i] for i in range(n) if not (i in toDel)]
+
     # Average H, S, B of each segment
     hues = np.array([cim[s == i][:,0].mean() * 360 for i in labels])
     sSegs = np.array([cim[s == i][:,1].mean() for i in labels])
@@ -19,9 +25,9 @@ def itten(cim, segments):
     saturationC = standardContrast(ittenSat, size)
     # TODO Contrast of hues (vector-based measure of hue spread ??)
     complementCA, complementCM = complementsContrast(hues)
-    #warmColdC = warmColdContrast(hues)
+    warmColdCA, warmColdCM = warmColdContrast(hues)
     return np.array([lightDarkC, saturationC, complementCA,
-        complementCM])
+        complementCM, warmColdCA, warmColdCM])
 
 """
     Image Retrieval by Emotional Semantics:
@@ -113,11 +119,11 @@ def satMembership(x):
 # Given c = [c_1, ..., c_n] (sorted) and x
 # such that c_1 < x <= c_n
 # Returns j such that c_j < x <= c_(j+1)
-# TODO binary search
 def interv(c, x):
     for j in range(1, len(c) - 2):
         if c[j] < x and x <= c[j + 1]:
             return j
+    raise NameError("Invalid X value")
 
 # Weighted standard deviation on values
 def standardContrast(values, weights):
@@ -139,6 +145,31 @@ def complementsContrast(hues):
             if d > M: M = d
     return ((2 * S) / (n ** 2 - n), M)
 
-# TODO
-def warmColdContradt(hues):
-    return 0
+def warmColdContrast(hues):
+    n = len(hues)
+    if n == 1: return (0, 0)
+    S, M = 0, 0
+    temps = [{}] * n
+    for i in range(n):
+        h = hues[i]
+        warm = np.cos(h - 50) if (0 <= h and h < 140) or (320 <= h
+                and h <= 360) else 0
+        cold = np.cos(h - 230) if 140 <= h and h < 320 else 0
+        neutral = 1 - (warm + cold)
+        temps[i] = {'cold': cold, 'warm': warm, 'neutral': neutral}
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            s1 = temps[i]['warm'] * temps[j]['warm'] +\
+                    temps[i]['cold'] * temps[j]['cold'] +\
+                    temps[i]['neutral'] * temps[j]['neutral']
+            s2x = lambda x: temps[x]['warm'] ** 2 + temps[x]['cold'] ** 2 +\
+                    temps[x]['neutral'] ** 2
+            s2 = np.sqrt(s2x(i) * s2x(j))
+            contrast = s1 / s2
+            S += contrast
+            if contrast > M: M = contrast
+    average = (2 * S) / (n ** 2 - n)
+    return (average, M)
+
+# TODO HARMONY

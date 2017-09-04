@@ -3,6 +3,8 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.model_selection import KFold, GridSearchCV, cross_val_predict
 from sklearn.naive_bayes import GaussianNB
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA, NMF
 import numpy as np
 from config import *
 
@@ -44,8 +46,27 @@ def F_RandomForestGrid(features, labels):
     print(search.best_params_)
     return RandomForestClassifier(**search.best_params_)
 
+## Best model yet (used by paper)
 def F_OVR(features, labels):
-    return OneVsRestClassifier(GaussianNB(), n_jobs = 4)
+    m = OneVsRestClassifier(GaussianNB(), n_jobs = 4)
+    pipe = Pipeline([
+        ('reduce_dim', PCA()),
+        ('classify', m)
+    ])
+
+    N_FEATURES_OPTIONS = [2, 8, 10, 14, 20]
+    param_grid = [
+        {
+            'reduce_dim': [PCA(iterated_power=7)],#, NMF()],
+            'reduce_dim__n_components': N_FEATURES_OPTIONS,
+        }
+    ]
+    grid = GridSearchCV(pipe, param_grid=param_grid,
+            refit = True, cv = KFold(n_splits = N_SPLITS), verbose = 0)
+    grid.fit(features, labels)
+    print("BEST = ", grid.best_params_)
+    return grid
+    
 
 def getModel(name, features, labels):
     return globals()[name](features, labels)

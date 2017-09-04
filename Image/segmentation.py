@@ -4,7 +4,9 @@ from skimage import morphology
 from skimage import filters
 from skimage import img_as_ubyte
 from skimage import exposure
+from skimage import color
 from scipy import stats, ndimage
+import matplotlib.pyplot as plt
 
 import warnings
 
@@ -22,17 +24,17 @@ def segmentation(orim):
     gradient = filters.rank.gradient(fim, morphology.disk(2))
     basins = watershed(fim, gradient)
     areas, labels = exposure.histogram(basins)
-    ##graph = graphFromBasins(basins, labels, im)
+    graph = graphFromBasins(basins, labels, im)
 
-    #layout = graph.layout("kk")
+    layout = graph.layout("kk")
     #plot(graph, layout=layout)
 
-    ##spanning = graph.spanning_tree()
-    ##n = waterfall(spanning)
-    ##reduced = simplify(basins, spanning)
-    #showSegmentation(orim, gradient, basins, basins)
-    ##return (reduced, n)
-    return (basins, len(labels))
+    spanning = graph.spanning_tree()
+    n = waterfall(spanning)
+    reduced = simplify(basins, spanning)
+    #showSegmentation(orim, gradient, basins, reduced)
+    return (reduced, n)
+    #return (basins, len(labels))
 
 """
     Performs watershed analysis.

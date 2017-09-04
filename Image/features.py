@@ -10,8 +10,6 @@ from skimage import feature
 from itten import *
 from segmentation import *
 
-# TODO Feature selection
-
 """
     Affective Image Classification using Features
     Inspired byPsychology and Art Theory, Machajdik

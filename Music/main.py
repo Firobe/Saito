@@ -1,36 +1,16 @@
 #!/bin/python
-import vamp
-import librosa
-import matplotlib.pyplot as plt
 import numpy as np
-import json
-from nicotools.nicodown_async import VideoDmc, VideoSmile
-from os import listdir
+import json, re
 import MeCab
-mecab = MeCab.Tagger("-Ochasen")
-print("Import OK")
+from config import *
+from nico import createWAV
 
-def extract_melody(filename, position, around=5):
-    data, rate = librosa.load(filename, offset = position - around,\
-            duration = 2 * around)
-    result = vamp.collect(data, rate, "mtg-melodia:melodia");
-    frameDur, melody = result['vector']
-    frameDur = frameDur.to_frame(rate)
-    rich_melody = []
-    cur = melody[0]
-    save = 0
-    for i in range(len(melody)):
-        if melody[i] <= 0: melody[i] = 0
-        if melody[i] != cur:
-            rich_melody.append((cur, (i - save) / rate))
-            cur = melody[i]
-            save = i
-    return rich_melody
-
-def retrieve_files(directory='.'):
-    return [f for f in listdir(directory) if ('jsonl' in f)]
-
-def parse_comments(filename, limit=np.inf):
+"""
+    Return list of comments from a given comment file
+    The comments are processed by MECAB and are sorted
+    by time in the video
+"""
+def parseComments(filename, limit=np.inf):
     print("Opening " + filename + "...")
     with open(filename, 'r') as myfile:
         data=myfile.readlines()
@@ -40,8 +20,25 @@ def parse_comments(filename, limit=np.inf):
         r['content'] = mecab.parse(r['content'])
     return sorted(raw, key = lambda r: r['vpos'])
 
-COMMENTS_DIR = 'comments/'
+mecab = MeCab.Tagger("-Ochasen")
 
-files = retrieve_files(COMMENTS_DIR)
-P = parse_comments(COMMENTS_DIR + files[0])
-print(P)
+"""
+    Create a WAV file containing the audio of a video
+    for every given ID
+"""
+def createAudio(files):
+    for f in files:
+        sm = re.search('([a-z]{2}[0-9]+)', f)
+        if sm: id = sm.group(1)
+        else: raise NameError(f + " is not a Nico ID")
+        try:
+            createWAV(id)
+        except Exception as e:
+            print(str(e))
+
+        
+
+#files = retrieve_files(COMMENTS_DIR)
+#P = parse_comments(COMMENTS_DIR + files[0])
+#print(P)
+createAudio(retrieveFiles())
