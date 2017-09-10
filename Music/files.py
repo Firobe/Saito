@@ -3,12 +3,6 @@
 import json, urllib.request, re, zipfile, os
 from config import *
 
-"""
-    Return list of paths to comment files
-"""
-def retrieveFiles(directory = COMMENT_FOLDER):
-    return [f for f in os.listdir(directory) if ('jsonl' in f)]
-
 def getFilteredIDs(category, criterion):
     f = open(METADATA_FOLDER + category + ".jsonl", "r") 
     data = f.readlines()
@@ -17,7 +11,7 @@ def getFilteredIDs(category, criterion):
             for v in raw if criterion(v)]
 
 def isMusicAndPopular(v):
-    return v['category'] == '音楽' and v['comment_num'] > 500
+    return v['category'] == '音楽' and v['comment_num'] > 500 and "ピアノ" in v['tags']
 
 def retrieveCategories():
     page = urllib.request.urlopen(DATASET_URL + "video/video.html").read()
@@ -56,8 +50,8 @@ for cat in categories:
         unzip(METADATA_FOLDER + filename, METADATA_FOLDER)
         # Extract ids of interesting videos
         ids = getFilteredIDs(cat, isMusicAndPopular)
+        print("> Got " + str(len(ids)) + " musics !")
         # Download comments file and extract only filtered files
         url = DATASET_URL + "comment/" + filename
         download(url, COMMENT_FOLDER + filename)
         unzip(COMMENT_FOLDER + filename, COMMENT_FOLDER, ids)
-        print("> Got " + str(len(ids)) + " musics !")

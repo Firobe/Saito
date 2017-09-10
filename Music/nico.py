@@ -1,5 +1,5 @@
 import nicopy
-import subprocess
+import subprocess, os
 from config import *
 
 def login():
@@ -16,9 +16,12 @@ def videoType(vidId):
 def getVid(vidId):
     cookie = login()
     print("Downloading ", vidId)
-    vid = nicopy.get_flv(vidId, cookie)
+    try:
+        vid = nicopy.get_flv(vidId, cookie)
+    except Exception as e:
+        raise NameError("NicoNico is not responding !")
     if vid == b'403 Forbidden':
-        raise NameError(vidId + " is not available on NicoVideo")
+        raise NameError(vidId + " is not downloadable on NicoVideo")
     vidType = videoType(vidId)
     return vid, vidType
 
@@ -43,5 +46,9 @@ def audioFromID(vidId):
     containing the audio of the NNV video with given ID
 """
 def createWAV(vidId):
+    filename = WAV_FOLDER + vidId + ".wav"
+    if os.path.isfile(filename):
+        print(filename + " already on disk !")
+        return
     audio = audioFromID(vidId)
-    toFile(audio, WAV_FOLDER + vidId + ".wav")
+    toFile(audio, filename)
