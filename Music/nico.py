@@ -30,6 +30,10 @@ def toFile(data, filename):
         f.write(data)
     print(filename, " written to disk")
 
+"""
+    Extract audio from video by calling ffmpeg
+    (WAV format)
+"""
 def getAudio(vid):
     command = "ffmpeg -i pipe:0 -f wav -vn -"
     process = subprocess.Popen(command, stdin = subprocess.PIPE,
@@ -52,3 +56,43 @@ def createWAV(vidId):
         return
     audio = audioFromID(vidId)
     toFile(audio, filename)
+
+"""
+    Return list of paths to comment files
+"""
+def retrieveFiles(directory = COMMENT_FOLDER):
+    return [f for f in os.listdir(directory) if ('jsonl' in f)]
+
+"""
+    Create a WAV file containing the audio of a video
+    for every given ID, in parllel
+"""
+def createAudio(files):
+    Parallel(n_jobs=2)(delayed(oneFile)(f) for f in files)
+
+"""
+    Extract the Nico ID of a filename and download the
+    corresponding audio file (if available)
+"""
+def oneFile(f):
+    sm = re.search('([a-z]{2}[0-9]+)', f)
+    if sm: id = sm.group(1)
+    else: raise NameError(f + " is not a Nico ID")
+    try:
+        createWAV(id)
+    except Exception as e:
+        print(str(e))
+
+"""
+    This will try to download the audio file corresponding to each
+    file stored in COMMENT_FOLDER
+
+    !! FFMPEG have to be installed on the system
+    !! The nicopy library have to be installed (available in pip)
+
+    NicoNico servers are very slow and often fail, so you will probably
+    have to launch the script multiple times (audio files that are
+    already downloaded will not be downloaded again)
+"""
+if __name__ == "__main__":
+    createAudio(retrieveFiles())

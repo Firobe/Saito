@@ -31,8 +31,9 @@ def download(url, file):
 
 """
     This script will download metadata from the NicoNico set
-    and filter only videos using which are music and have at least 500
-    comments. It will then download only the comments of these videos.
+    and filter only videos using which are music, are tagged "piano"
+    and have at least 500 comments. 
+    It will then download only the comments of these videos.
 
     Uses config.py
 """
