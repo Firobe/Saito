@@ -14,6 +14,7 @@ import warnings
     Fast implementation of waterfall based on graphs,
     Marcotegui, Beucher
     http://cmm.ensmp.fr/~beucher/publi/marcotegui_waterfalls_ismm05.pdf
+    ! Unfortunately probably buggy
 """
 def segmentation(orim):
     # Watershed

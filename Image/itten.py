@@ -75,7 +75,7 @@ def lightMembership(x):
                 c[j] = -1 # Edge case
             else:
                 c[j] = s1 / s2
-        # Edge case management (TODO improve it so it's linear)
+        # Edge case management (TODO improve it so it's linear in time)
         for j in range(1, 6):
             if c[j] == -1:
                 A, B = j, j
@@ -171,5 +171,3 @@ def warmColdContrast(hues):
             if contrast > M: M = contrast
     average = (2 * S) / (n ** 2 - n)
     return (average, M)
-
-# TODO HARMONY
