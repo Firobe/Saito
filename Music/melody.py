@@ -65,5 +65,3 @@ def extractMelody(filename, position, around=5):
     M, rate = extractRawMelody(filename, position, around)
     M = nearestSemiTone(M)
     return richMelody(M, rate)
-
-print(extractMelody("eva.mp3", 20, 20))
